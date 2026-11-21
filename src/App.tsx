@@ -515,6 +515,7 @@ export const App: React.FC = () => {
         <AdminPortal
           currentUser={currentUser}
           onLogout={handleLogout}
+          onSwitchRole={handleSwitchRole}
         />
       </div>
     );

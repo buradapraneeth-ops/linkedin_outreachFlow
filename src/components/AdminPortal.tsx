@@ -17,19 +17,25 @@ import {
   AlertTriangle,
   Radio,
   FileText,
-  Sliders
+  Sliders,
+  Check,
+  Database,
+  Layers,
+  ArrowRight
 } from 'lucide-react';
-import { User, FleetMetrics, DncRule, AuditLog, AdminTab } from '../types';
+import { User, FleetMetrics, DncRule, AuditLog, AdminTab, UserRole } from '../types';
 import { adminApi } from '../services/api';
 
 interface AdminPortalProps {
   currentUser: User;
   onLogout: () => void;
+  onSwitchRole?: (role: UserRole) => void;
 }
 
 export const AdminPortal: React.FC<AdminPortalProps> = ({
   currentUser,
-  onLogout
+  onLogout,
+  onSwitchRole
 }) => {
   const [activeAdminTab, setActiveAdminTab] = useState<AdminTab>('fleet-overview');
   const [userList, setUserList] = useState<User[]>([]);
@@ -41,6 +47,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   const [newGlobalDnc, setNewGlobalDnc] = useState('');
   const [notice, setNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState<string | null>(null);
 
   const showNotice = (msg: string) => {
     setNotice(msg);
@@ -56,12 +63,13 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
         adminApi.listGlobalDnc(),
         adminApi.getAuditLogs()
       ]);
-      setUserList(users);
-      setFleetMetrics(metrics);
-      setGlobalDncList(dnc);
-      setAuditLogs(logs);
+      setUserList(users || []);
+      setFleetMetrics(metrics || null);
+      setGlobalDncList(dnc || []);
+      setAuditLogs(logs || []);
     } catch (err) {
-      console.error('Failed to load admin data', err);
+      console.error('Failed to load admin data from backend', err);
+      showNotice('Unable to fetch latest admin telemetry from backend.');
     } finally {
       setLoading(false);
     }
@@ -73,38 +81,58 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
 
   const handleToggleUserStatus = async (userId: string, currentStatus: string) => {
     const nextStatus = currentStatus === 'active' ? 'suspended' : 'active';
-    await adminApi.updateUserStatus(userId, nextStatus);
-    setUserList(prev => prev.map(u => u.id === userId ? { ...u, status: nextStatus as any } : u));
-    showNotice(`Organization status updated to ${nextStatus.toUpperCase()}.`);
+    setIsUpdatingStatus(userId);
+    try {
+      await adminApi.updateUserStatus(userId, nextStatus);
+      setUserList(prev => prev.map(u => u.id === userId ? { ...u, status: nextStatus as any } : u));
+      showNotice(`Organization status updated to ${nextStatus.toUpperCase()}.`);
+    } catch (err: any) {
+      showNotice(`Failed to update status: ${err?.message || 'Server error'}`);
+    } finally {
+      setIsUpdatingStatus(null);
+    }
   };
 
   const handleToggleKillSwitch = async () => {
     if (!fleetMetrics) return;
     const nextState = !fleetMetrics.kill_switch_active;
-    await adminApi.toggleKillSwitch(nextState);
-    setFleetMetrics({ ...fleetMetrics, kill_switch_active: nextState });
-    showNotice(nextState ? 'FLEET EMERGENCY KILL SWITCH ACTIVATED.' : 'Fleet sequences resumed.');
+    try {
+      await adminApi.toggleKillSwitch(nextState);
+      setFleetMetrics(prev => prev ? { ...prev, kill_switch_active: nextState } : null);
+      showNotice(nextState ? 'FLEET EMERGENCY KILL SWITCH ACTIVATED.' : 'Fleet sequences resumed.');
+    } catch (err: any) {
+      showNotice(`Failed to toggle kill switch: ${err?.message || 'Server error'}`);
+    }
   };
 
   const handleAddGlobalDnc = async () => {
     if (!newGlobalDnc.trim()) return;
-    const rule = await adminApi.addGlobalDnc(newGlobalDnc.trim());
-    setGlobalDncList(prev => [rule, ...prev]);
-    setNewGlobalDnc('');
-    showNotice('Global DNC rule broadcasted to all customer accounts.');
+    try {
+      const rule = await adminApi.addGlobalDnc(newGlobalDnc.trim());
+      setGlobalDncList(prev => [rule, ...prev]);
+      setNewGlobalDnc('');
+      showNotice('Global DNC rule broadcasted to all customer accounts.');
+    } catch (err: any) {
+      showNotice(`Failed to add DNC rule: ${err?.message || 'Server error'}`);
+    }
   };
 
   const handleDeleteGlobalDnc = async (id: string) => {
-    await adminApi.deleteGlobalDnc(id);
-    setGlobalDncList(prev => prev.filter(r => r.id !== id));
-    showNotice('Rule removed from global registry.');
+    try {
+      await adminApi.deleteGlobalDnc(id);
+      setGlobalDncList(prev => prev.filter(r => r.id !== id));
+      showNotice('Rule removed from global registry.');
+    } catch (err: any) {
+      showNotice(`Failed to delete DNC rule: ${err?.message || 'Server error'}`);
+    }
   };
 
   const filteredUsers = userList.filter(u => {
+    const term = searchTerm.toLowerCase();
     const matchesSearch = 
-      u.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      u.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      u.company_name.toLowerCase().includes(searchTerm.toLowerCase());
+      (u.name && u.name.toLowerCase().includes(term)) ||
+      (u.email && u.email.toLowerCase().includes(term)) ||
+      (u.company_name && u.company_name.toLowerCase().includes(term));
     const matchesStatus = statusFilter === 'all' || u.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
@@ -123,17 +151,27 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="font-bold text-white text-base tracking-tight">OutreachFlow Admin Console</span>
+                  <span className="font-bold text-white text-base tracking-tight">Super Admin Console</span>
                   <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30">
-                    Platform Ops
+                    Production Ops
                   </span>
                 </div>
-                <p className="text-[11px] text-slate-400">Multi-tenant fleet safety, nodes & tenant registry</p>
+                <p className="text-[11px] text-slate-400">Multi-tenant fleet management & security enforcement</p>
               </div>
             </div>
 
-            <div className="flex items-center gap-4">
-              {/* Emergency Fleet Switch */}
+            <div className="flex items-center gap-3">
+              {/* Refresh Data Button */}
+              <button
+                onClick={loadData}
+                disabled={loading}
+                title="Refresh Live Telemetry"
+                className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition disabled:opacity-50"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+              </button>
+
+              {/* Emergency Fleet Kill Switch */}
               <button
                 onClick={handleToggleKillSwitch}
                 className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
@@ -143,9 +181,22 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                 }`}
               >
                 <Radio className="w-3.5 h-3.5 text-red-400" />
-                <span>{fleetMetrics?.kill_switch_active ? 'GLOBAL KILL SWITCH ACTIVE' : 'Fleet Armed (Normal)'}</span>
+                <span>{fleetMetrics?.kill_switch_active ? 'GLOBAL KILL SWITCH ACTIVE' : 'Fleet Active'}</span>
               </button>
 
+              {/* Switch to Customer View pill */}
+              {onSwitchRole && (
+                <button
+                  onClick={() => onSwitchRole('customer')}
+                  className="hidden md:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-blue-500/10 border border-blue-500/30 text-blue-400 hover:bg-blue-500/20 text-xs font-semibold transition"
+                  title="Switch into Customer Portal to inspect client view"
+                >
+                  <Layers className="w-3.5 h-3.5" />
+                  <span>Customer View</span>
+                </button>
+              )}
+
+              {/* Admin Profile & Logout */}
               <div className="flex items-center gap-2 pl-3 border-l border-slate-800">
                 <div className="text-right hidden sm:block">
                   <div className="text-xs font-bold text-white">{currentUser.name}</div>
@@ -168,14 +219,14 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
         <div className="border-t border-slate-800 bg-slate-900/60">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex space-x-2 py-2 overflow-x-auto text-xs font-medium">
             {[
-              { id: 'fleet-overview', label: 'Fleet Overview & Metrics', icon: <Server className="w-3.5 h-3.5 text-purple-400" /> },
-              { id: 'tenants', label: `Tenants & Organizations (${userList.length})`, icon: <Building2 className="w-3.5 h-3.5 text-blue-400" /> },
-              { id: 'global-dnc', label: 'Global DNC Registry', icon: <Ban className="w-3.5 h-3.5 text-red-400" /> },
-              { id: 'audit-logs', label: 'Audit Trail', icon: <FileText className="w-3.5 h-3.5 text-emerald-400" /> },
+              { id: 'fleet-overview' as AdminTab, label: 'Fleet Overview & Metrics', icon: <Server className="w-3.5 h-3.5 text-purple-400" /> },
+              { id: 'tenants' as AdminTab, label: `Tenants & Organizations (${userList.length})`, icon: <Building2 className="w-3.5 h-3.5 text-blue-400" /> },
+              { id: 'global-dnc' as AdminTab, label: `Global DNC Registry (${globalDncList.length})`, icon: <Ban className="w-3.5 h-3.5 text-red-400" /> },
+              { id: 'audit-logs' as AdminTab, label: `Audit Trail (${auditLogs.length})`, icon: <FileText className="w-3.5 h-3.5 text-emerald-400" /> },
             ].map(tab => (
               <button
                 key={tab.id}
-                onClick={() => setActiveAdminTab(tab.id as AdminTab)}
+                onClick={() => setActiveAdminTab(tab.id)}
                 className={`flex items-center gap-2 px-3 py-1.5 rounded-lg whitespace-nowrap transition ${
                   activeAdminTab === tab.id
                     ? 'bg-purple-600/20 text-purple-300 border border-purple-500/40 font-bold'
@@ -205,7 +256,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
         {activeAdminTab === 'fleet-overview' && (
           <div className="space-y-6">
             
-            {/* Fleet Summary Cards */}
+            {/* Dynamic Fleet Summary Cards */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               
               <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
@@ -213,7 +264,9 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                   <span>Registered Tenants</span>
                   <Building2 className="w-4 h-4 text-blue-400" />
                 </div>
-                <div className="text-2xl font-bold text-white mt-1">{userList.length} Orgs</div>
+                <div className="text-2xl font-bold text-white mt-1">
+                  {userList.length} {userList.length === 1 ? 'Org' : 'Orgs'}
+                </div>
                 <div className="text-[11px] text-emerald-400 mt-0.5">
                   {userList.filter(u => u.status === 'active').length} Active & Provisioned
                 </div>
@@ -225,10 +278,10 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                   <Server className="w-4 h-4 text-emerald-400" />
                 </div>
                 <div className="text-2xl font-bold text-white mt-1">
-                  {fleetMetrics?.active_accounts || 18} Nodes
+                  {fleetMetrics?.active_accounts ?? 0} {fleetMetrics?.active_accounts === 1 ? 'Account' : 'Accounts'}
                 </div>
                 <div className="text-[11px] text-slate-400 mt-0.5">
-                  WebSocket latency: 38ms
+                  Synchronized across tenant fleets
                 </div>
               </div>
 
@@ -238,10 +291,10 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                   <Activity className="w-4 h-4 text-purple-400" />
                 </div>
                 <div className="text-2xl font-bold text-white mt-1">
-                  {fleetMetrics?.global_invites_today || 142}
+                  {fleetMetrics?.global_invites_today ?? 0}
                 </div>
                 <div className="text-[11px] text-blue-400 mt-0.5">
-                  Safety ceiling: 250/day
+                  Aggregated live daily volume
                 </div>
               </div>
 
@@ -251,45 +304,57 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                   <ShieldCheck className="w-4 h-4 text-emerald-400" />
                 </div>
                 <div className="text-2xl font-bold text-emerald-400 mt-1">
-                  {fleetMetrics?.fleet_health || 98.4}%
+                  {fleetMetrics?.fleet_health !== undefined && fleetMetrics.fleet_health > 0 
+                    ? `${fleetMetrics.fleet_health}%` 
+                    : (fleetMetrics?.active_accounts === 0 ? '100%' : 'N/A')}
                 </div>
                 <div className="text-[11px] text-emerald-400 mt-0.5">
-                  Zero CAPTCHA restrictions
+                  Calculated from active node metrics
                 </div>
               </div>
 
             </div>
 
-            {/* Live Infrastructure Nodes & Services */}
+            {/* Live Operational Status Cards */}
             <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
               <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <Server className="w-4 h-4 text-emerald-400" />
-                <span>Sending Worker Fleet Status</span>
+                <Database className="w-4 h-4 text-emerald-400" />
+                <span>Backend Architecture & Platform Telemetry</span>
               </h3>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
                 <div className="bg-slate-800/40 p-3.5 rounded-xl border border-slate-700/60 space-y-1">
                   <div className="flex items-center justify-between">
-                    <span className="font-bold text-white">Dispatcher Cluster Alpha</span>
-                    <span className="text-[10px] bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded font-bold">100% UP</span>
+                    <span className="font-bold text-white">Database Engine</span>
+                    <span className="text-[10px] bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded font-bold">ONLINE</span>
                   </div>
-                  <p className="text-slate-400 text-[11px]">Celery task worker · Region: us-east-1</p>
+                  <p className="text-slate-400 text-[11px]">SQLite multi-tenant store with dynamic foreign key isolation</p>
                 </div>
 
                 <div className="bg-slate-800/40 p-3.5 rounded-xl border border-slate-700/60 space-y-1">
                   <div className="flex items-center justify-between">
-                    <span className="font-bold text-white">Anti-Bot Pacing Engine</span>
-                    <span className="text-[10px] bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded font-bold">ARMED</span>
+                    <span className="font-bold text-white">Platform Kill Switch</span>
+                    <span className={`text-[10px] px-2 py-0.5 rounded font-bold ${
+                      fleetMetrics?.kill_switch_active 
+                        ? 'bg-red-500/20 text-red-400' 
+                        : 'bg-emerald-500/10 text-emerald-400'
+                    }`}>
+                      {fleetMetrics?.kill_switch_active ? 'ACTIVE (HALTED)' : 'DISARMED (NORMAL)'}
+                    </span>
                   </div>
-                  <p className="text-slate-400 text-[11px]">Random jitter (45s–180s) enforcing</p>
+                  <p className="text-slate-400 text-[11px]">Instant circuit breaker across all tenant background workers</p>
                 </div>
 
                 <div className="bg-slate-800/40 p-3.5 rounded-xl border border-slate-700/60 space-y-1">
                   <div className="flex items-center justify-between">
-                    <span className="font-bold text-white">Extension Relay Socket</span>
-                    <span className="text-[10px] bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded font-bold">CONNECTED</span>
+                    <span className="font-bold text-white">Active Tenants</span>
+                    <span className="text-[10px] bg-blue-500/10 text-blue-400 px-2 py-0.5 rounded font-bold">
+                      {userList.length} TENANTS
+                    </span>
                   </div>
-                  <p className="text-slate-400 text-[11px]">18 active client browser sessions</p>
+                  <p className="text-slate-400 text-[11px]">
+                    {fleetMetrics?.active_accounts ?? 0} connected LinkedIn sending profiles authenticated
+                  </p>
                 </div>
               </div>
             </div>
@@ -304,7 +369,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
               <div>
                 <h2 className="text-base font-bold text-white flex items-center gap-2">
                   <Building2 className="w-4 h-4 text-blue-400" />
-                  <span>Tenant Organizations & Users</span>
+                  <span>Tenant Organizations & Users ({userList.length})</span>
                 </h2>
                 <p className="text-xs text-slate-400">
                   Manage customer plans, view connected LinkedIn account counts, and toggle account access.
@@ -348,82 +413,102 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/60">
-                  {filteredUsers.map((user) => {
-                    const isActive = user.status === 'active';
-                    const isSuperAdmin = user.role === 'admin';
+                  {filteredUsers.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="py-12 text-center text-slate-400">
+                        <Building2 className="w-8 h-8 text-slate-600 mx-auto mb-2" />
+                        <p className="font-semibold text-slate-300">No organizations found</p>
+                        <p className="text-[11px] text-slate-500 mt-0.5">
+                          {searchTerm ? `No tenants match "${searchTerm}".` : 'No tenant organizations registered in the database.'}
+                        </p>
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredUsers.map((user) => {
+                      const isActive = user.status === 'active';
+                      const isSuperAdmin = user.role === 'admin';
+                      const initial = (user.name || user.email || 'U').charAt(0).toUpperCase();
 
-                    return (
-                      <tr key={user.id} className="hover:bg-slate-800/30 transition">
-                        <td className="py-3 px-3">
-                          <div className="flex items-center gap-2.5">
-                            <img 
-                              src={user.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80'} 
-                              alt={user.name} 
-                              className="w-8 h-8 rounded-full object-cover border border-slate-700" 
-                            />
-                            <div>
-                              <div className="font-bold text-white flex items-center gap-1.5">
-                                <span>{user.name}</span>
-                                {user.id === currentUser.id && (
-                                  <span className="text-[10px] text-purple-400 font-mono">(You)</span>
-                                )}
+                      return (
+                        <tr key={user.id} className="hover:bg-slate-800/30 transition">
+                          <td className="py-3 px-3">
+                            <div className="flex items-center gap-2.5">
+                              {user.avatar ? (
+                                <img 
+                                  src={user.avatar} 
+                                  alt={user.name} 
+                                  className="w-8 h-8 rounded-full object-cover border border-slate-700" 
+                                />
+                              ) : (
+                                <div className="w-8 h-8 rounded-full bg-purple-600/20 text-purple-300 font-bold flex items-center justify-center border border-purple-500/30 text-xs">
+                                  {initial}
+                                </div>
+                              )}
+                              <div>
+                                <div className="font-bold text-white flex items-center gap-1.5">
+                                  <span>{user.name}</span>
+                                  {user.id === currentUser.id && (
+                                    <span className="text-[10px] text-purple-400 font-mono">(You)</span>
+                                  )}
+                                </div>
+                                <div className="text-[11px] text-slate-400">{user.email}</div>
                               </div>
-                              <div className="text-[11px] text-slate-400">{user.email}</div>
                             </div>
-                          </div>
-                        </td>
+                          </td>
 
-                        <td className="py-3 px-2">
-                          <div className="flex items-center gap-1.5">
-                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-                              isSuperAdmin 
-                                ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30' 
-                                : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                          <td className="py-3 px-2">
+                            <div className="flex items-center gap-1.5">
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                                isSuperAdmin 
+                                  ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30' 
+                                  : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                              }`}>
+                                {user.role}
+                              </span>
+                              <span className="bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded text-[10px] font-mono">
+                                {user.plan || 'Standard'}
+                              </span>
+                            </div>
+                          </td>
+
+                          <td className="py-3 px-2 text-slate-300 font-medium">
+                            {user.company_name || 'Individual'}
+                          </td>
+
+                          <td className="py-3 px-2 text-slate-300 font-mono">
+                            {user.connected_accounts_count ?? 0} Accounts
+                          </td>
+
+                          <td className="py-3 px-2">
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                              isActive 
+                                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
+                                : 'bg-red-500/10 text-red-400 border border-red-500/20'
                             }`}>
-                              {user.role}
+                              <span className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-emerald-400' : 'bg-red-400'}`} />
+                              {(user.status || 'active').toUpperCase()}
                             </span>
-                            <span className="bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded text-[10px] font-mono">
-                              {user.plan}
-                            </span>
-                          </div>
-                        </td>
+                          </td>
 
-                        <td className="py-3 px-2 text-slate-300 font-medium">
-                          {user.company_name}
-                        </td>
-
-                        <td className="py-3 px-2 text-slate-300 font-mono">
-                          {user.connected_accounts_count || 1} Accounts
-                        </td>
-
-                        <td className="py-3 px-2">
-                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                            isActive 
-                              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
-                              : 'bg-red-500/10 text-red-400 border border-red-500/20'
-                          }`}>
-                            <span className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-emerald-400' : 'bg-red-400'}`} />
-                            {user.status.toUpperCase()}
-                          </span>
-                        </td>
-
-                        <td className="py-3 px-3 text-right">
-                          {user.id !== currentUser.id && (
-                            <button
-                              onClick={() => handleToggleUserStatus(user.id, user.status)}
-                              className={`text-xs px-2.5 py-1 rounded font-medium transition ${
-                                isActive 
-                                  ? 'bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20' 
-                                  : 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20'
-                              }`}
-                            >
-                              {isActive ? 'Suspend Org' : 'Activate Org'}
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
+                          <td className="py-3 px-3 text-right">
+                            {user.id !== currentUser.id && (
+                              <button
+                                onClick={() => handleToggleUserStatus(user.id, user.status)}
+                                disabled={isUpdatingStatus === user.id}
+                                className={`text-xs px-2.5 py-1 rounded font-medium transition disabled:opacity-50 ${
+                                  isActive 
+                                    ? 'bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20' 
+                                    : 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20'
+                                }`}
+                              >
+                                {isUpdatingStatus === user.id ? 'Updating...' : (isActive ? 'Suspend Org' : 'Activate Org')}
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
                 </tbody>
               </table>
             </div>
@@ -444,7 +529,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                 </p>
               </div>
               <span className="text-xs font-mono text-slate-400 bg-slate-800 px-2 py-0.5 rounded">
-                {globalDncList.length} rules
+                {globalDncList.length} {globalDncList.length === 1 ? 'rule' : 'rules'}
               </span>
             </div>
 
@@ -465,47 +550,72 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
               </button>
             </div>
 
-            <div className="space-y-2">
-              {globalDncList.map((item) => (
-                <div key={item.id} className="bg-slate-800/40 border border-slate-700/60 p-2.5 rounded-lg flex items-center justify-between text-xs font-mono text-slate-300">
-                  <div className="flex items-center gap-2">
-                    <ShieldAlert className="w-3.5 h-3.5 text-red-400" />
-                    <span>{item.rule}</span>
+            {globalDncList.length === 0 ? (
+              <div className="bg-slate-800/30 border border-slate-800/80 rounded-xl p-8 text-center space-y-2">
+                <Ban className="w-8 h-8 text-slate-600 mx-auto" />
+                <p className="text-sm font-semibold text-slate-300">No Global DNC Rules Configured</p>
+                <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                  Enter a domain or competitor pattern above to broadcast a system-wide exclusion rule across all tenants.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {globalDncList.map((item) => (
+                  <div key={item.id} className="bg-slate-800/40 border border-slate-700/60 p-2.5 rounded-lg flex items-center justify-between text-xs font-mono text-slate-300">
+                    <div className="flex items-center gap-2">
+                      <ShieldAlert className="w-3.5 h-3.5 text-red-400" />
+                      <span>{item.rule}</span>
+                    </div>
+                    <button
+                      onClick={() => handleDeleteGlobalDnc(item.id)}
+                      className="text-slate-500 hover:text-red-400 p-1 transition"
+                    >
+                      Remove
+                    </button>
                   </div>
-                  <button
-                    onClick={() => handleDeleteGlobalDnc(item.id)}
-                    className="text-slate-500 hover:text-red-400 p-1"
-                  >
-                    Remove
-                  </button>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
         {/* ================= TAB 4: AUDIT TRAIL ================= */}
         {activeAdminTab === 'audit-logs' && (
           <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
-            <h3 className="text-base font-bold text-white flex items-center gap-2">
-              <FileText className="w-4 h-4 text-emerald-400" />
-              <span>Platform Event & Audit Trail</span>
-            </h3>
-
-            <div className="space-y-2">
-              {auditLogs.map((log) => (
-                <div key={log.id} className="bg-slate-800/40 border border-slate-700/60 p-3 rounded-lg flex items-center justify-between text-xs">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-purple-400 font-mono">[{log.action}]</span>
-                      <span className="text-white font-medium">{log.details}</span>
-                    </div>
-                    <div className="text-[11px] text-slate-400 mt-0.5">By: {log.user_email}</div>
-                  </div>
-                  <span className="font-mono text-slate-500 text-[11px]">{log.timestamp}</span>
-                </div>
-              ))}
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <FileText className="w-4 h-4 text-emerald-400" />
+                <span>Platform Event & Audit Trail</span>
+              </h3>
+              <span className="text-xs font-mono text-slate-400 bg-slate-800 px-2 py-0.5 rounded">
+                {auditLogs.length} {auditLogs.length === 1 ? 'event' : 'events'}
+              </span>
             </div>
+
+            {auditLogs.length === 0 ? (
+              <div className="bg-slate-800/30 border border-slate-800/80 rounded-xl p-8 text-center space-y-2">
+                <FileText className="w-8 h-8 text-slate-600 mx-auto" />
+                <p className="text-sm font-semibold text-slate-300">No System Audit Events Recorded</p>
+                <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                  Security events, campaign launches, and administrative actions will be logged here dynamically in real-time.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {auditLogs.map((log) => (
+                  <div key={log.id} className="bg-slate-800/40 border border-slate-700/60 p-3 rounded-lg flex items-center justify-between text-xs">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-purple-400 font-mono">[{log.action}]</span>
+                        <span className="text-white font-medium">{log.details}</span>
+                      </div>
+                      <div className="text-[11px] text-slate-400 mt-0.5">By: {log.user_email}</div>
+                    </div>
+                    <span className="font-mono text-slate-500 text-[11px]">{log.timestamp}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 

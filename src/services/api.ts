@@ -1178,11 +1178,11 @@ export const adminApi = {
     } catch {}
 
     const users = getLocalCollection<User>('users', initialLocalUsers);
-    const accounts = getLocalCollection<LinkedInAccount>('accounts', initialLocalAccounts);
+    const accounts = getLocalCollection<LinkedInAccount>('accounts', () => []);
     const totalInvites = accounts.reduce((acc, a) => acc + (a.invites_today || 0), 0);
     const avgHealth = accounts.length > 0 
       ? Math.round(accounts.reduce((acc, a) => acc + (a.health_score || 0), 0) / accounts.length) 
-      : 92;
+      : 0;
 
     return {
       active_users: users.filter(u => u.status === 'active').length,
@@ -1195,10 +1195,10 @@ export const adminApi = {
 
   toggleEmergencyKillSwitch: async (activate: boolean): Promise<boolean> => {
     try {
-      const res = await fetch(`${API_BASE}/admin/emergency-pause`, {
+      const res = await fetch(`${API_BASE}/admin/fleet/kill-switch`, {
         method: 'POST',
         headers: getHeaders(),
-        body: JSON.stringify({ activate })
+        body: JSON.stringify({ active: activate })
       });
       if (res.ok) return true;
     } catch {}
@@ -1216,10 +1216,7 @@ export const adminApi = {
       if (res.ok) return await res.json();
     } catch {}
 
-    return [
-      { id: 'dnc_glob_1', rule: 'competitor-corp.com', is_global: true, created_at: '2026-11-01' },
-      { id: 'dnc_glob_2', rule: 'restricted-firm.io', is_global: true, created_at: '2026-11-05' }
-    ];
+    return [];
   },
 
   addGlobalDnc: async (rule: string): Promise<DncRule> => {
@@ -1253,35 +1250,6 @@ export const adminApi = {
       if (res.ok) return await res.json();
     } catch {}
 
-    return [
-      {
-        id: 'log_01',
-        user_email: 'praneeth@techinnovate.io',
-        action: 'CAMPAIGN_LAUNCHED',
-        details: 'Launched campaign: AI CTOs & VP Engineering Outreach with 48 leads on acct_praneeth_01',
-        timestamp: '2026-11-19 14:22:10 UTC'
-      },
-      {
-        id: 'log_02',
-        user_email: 'praneeth@techinnovate.io',
-        action: 'ACCOUNT_CONNECTED',
-        details: 'Connected secondary account: Praneeth (Enterprise Executive)',
-        timestamp: '2026-11-18 10:15:02 UTC'
-      },
-      {
-        id: 'log_03',
-        user_email: 'sophia@cloudscale.net',
-        action: 'LEADS_CSV_UPLOAD',
-        details: 'Bulk imported 150 leads from q4_prospects.csv',
-        timestamp: '2026-11-17 18:30:45 UTC'
-      },
-      {
-        id: 'log_04',
-        user_email: 'admin@outreachflow.com',
-        action: 'GLOBAL_DNC_ADDED',
-        details: 'Added global exclusion wildcard: *.restricted-firm.io',
-        timestamp: '2026-11-16 09:05:12 UTC'
-      }
-    ];
+    return [];
   }
 };
