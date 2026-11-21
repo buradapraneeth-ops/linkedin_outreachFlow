@@ -4,21 +4,15 @@ import {
   AlertTriangle, 
   PauseCircle, 
   PlayCircle, 
-  Users, 
-  Send, 
-  MessageSquare, 
-  Inbox, 
-  BarChart3, 
-  Settings, 
+  Layers, 
+  ChevronDown, 
   Sparkles, 
-  Compass, 
-  Cpu,
-  Layers,
-  ChevronDown,
-  LogOut,
-  Plus
+  ShieldAlert,
+  Check,
+  Zap,
+  ArrowRight
 } from 'lucide-react';
-import { NavTab, LinkedInAccount, User } from '../types';
+import { NavTab, LinkedInAccount, User, UserRole } from '../types';
 
 interface HeaderProps {
   currentTab: NavTab;
@@ -32,6 +26,7 @@ interface HeaderProps {
   unreadInboxCount: number;
   currentUser: User;
   onLogout: () => void;
+  onSwitchRole: (role: UserRole) => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -43,227 +38,204 @@ export const Header: React.FC<HeaderProps> = ({
   emergencyPaused,
   onToggleEmergencyPause,
   pendingApprovalsCount,
-  unreadInboxCount,
   currentUser,
-  onLogout
+  onSwitchRole
 }) => {
   const [showAccountDropdown, setShowAccountDropdown] = useState(false);
 
-  const quotaPercentage = activeAccount 
-    ? Math.round((activeAccount.invites_today / activeAccount.daily_cap) * 100) 
+  const getPageMeta = (tab: NavTab) => {
+    switch (tab) {
+      case 'dashboard':
+        return { title: 'Executive Overview', subtitle: 'Outreach pacing, safety diagnostics & live funnel' };
+      case 'campaigns':
+        return { title: 'Campaign Sequences', subtitle: 'Cadence workflows, step builders & lead management' };
+      case 'leads':
+        return { title: 'Consolidated CRM Pipeline', subtitle: 'Prospect database, multi-source ingestion & tags' };
+      case 'message-studio':
+        return { title: 'AI Message Studio', subtitle: 'Personalized drafts, A/B variants & human approval queue' };
+      case 'inbox':
+        return { title: 'Unified Smart Inbox', subtitle: 'Multi-account LinkedIn replies & meeting bookings' };
+      case 'accounts':
+        return { title: 'LinkedIn Accounts Manager', subtitle: 'Multi-account connection, warm-up pacing & session health' };
+      case 'analytics':
+        return { title: 'Performance Analytics', subtitle: 'Funnel conversion rates, velocity & meeting bookings' };
+      case 'safety-simulator':
+        return { title: 'Safety Gate Test & Diagnostics', subtitle: 'Algorithmic rate check simulation & anti-ban rules' };
+      case 'settings':
+        return { title: 'Safety Pacing & Settings', subtitle: 'Gaussian human jitter, daily limits & DNC exclusion registry' };
+      default:
+        return { title: 'OutreachFlow', subtitle: 'LinkedIn Automation Engine' };
+    }
+  };
+
+  const pageMeta = getPageMeta(currentTab);
+  const quotaPercent = activeAccount
+    ? Math.min(100, Math.round((activeAccount.invites_today / Math.max(1, activeAccount.daily_cap)) * 100))
     : 0;
 
-  const navItems: { id: NavTab; label: string; icon: React.ReactNode; badge?: number }[] = [
-    { id: 'dashboard', label: 'Dashboard', icon: <BarChart3 className="w-4 h-4" /> },
-    { id: 'accounts', label: `LinkedIn Accounts (${accounts.length})`, icon: <Layers className="w-4 h-4 text-blue-400" /> },
-    { id: 'campaigns', label: 'Campaigns', icon: <Send className="w-4 h-4" /> },
-    { id: 'leads', label: 'Leads & Pipeline', icon: <Users className="w-4 h-4" /> },
-    { 
-      id: 'message-studio', 
-      label: 'Message Studio', 
-      icon: <Sparkles className="w-4 h-4 text-amber-400" />,
-      badge: pendingApprovalsCount 
-    },
-    { 
-      id: 'inbox', 
-      label: 'Inbox', 
-      icon: <Inbox className="w-4 h-4" />,
-      badge: unreadInboxCount 
-    },
-    { id: 'analytics', label: 'Analytics', icon: <BarChart3 className="w-4 h-4" /> },
-    { id: 'safety-simulator', label: 'Safety Gate Test', icon: <Cpu className="w-4 h-4 text-emerald-400" /> },
-    { id: 'settings', label: 'Safety & Settings', icon: <Settings className="w-4 h-4" /> },
-  ];
-
   return (
-    <header className="sticky top-0 z-40 bg-slate-900/90 backdrop-blur-md border-b border-slate-800">
-      {/* Top Banner if Emergency Paused */}
+    <header className="sticky top-0 z-20 bg-slate-950/80 backdrop-blur-md border-b border-slate-800/80">
+      
+      {/* Emergency Kill Switch Alert Banner */}
       {emergencyPaused && (
         <div className="bg-red-500/15 border-b border-red-500/30 px-4 py-2 text-xs font-medium text-red-300 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4 text-red-400 animate-pulse" />
-            <span><strong>EMERGENCY KILL SWITCH ACTIVE:</strong> All outgoing LinkedIn actions, extensions, and automated sequences are strictly paused.</span>
+            <AlertTriangle className="w-4 h-4 text-red-400 animate-pulse shrink-0" />
+            <span>
+              <strong>EMERGENCY KILL SWITCH ACTIVE:</strong> All outgoing LinkedIn actions and sequences are frozen.
+            </span>
           </div>
           <button 
             onClick={onToggleEmergencyPause}
             className="bg-red-600 hover:bg-red-500 text-white px-3 py-1 rounded text-xs font-semibold tracking-wide transition shadow"
           >
-            Resume Platform
+            Resume Outreach
           </button>
         </div>
       )}
 
-      {/* Main Header Bar */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16 gap-4">
-          
-          {/* Logo & Brand */}
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-gradient-to-tr from-blue-700 via-blue-600 to-cyan-500 flex items-center justify-center shadow-lg shadow-blue-500/20 font-bold text-white text-lg">
-              <span className="tracking-tight">in</span>
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-base font-bold text-white tracking-tight">OutreachFlow</span>
-                <span className="text-[10px] uppercase font-semibold px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">
-                  Customer Portal
-                </span>
-              </div>
-              <p className="text-xs text-slate-400 hidden sm:block">AI-Personalized LinkedIn Outreach & Safety Gate</p>
-            </div>
-          </div>
+      {/* Main Bar */}
+      <div className="px-6 py-3 flex items-center justify-between gap-4">
+        
+        {/* Left: View Title & Subtitle */}
+        <div>
+          <h1 className="text-base font-bold text-white tracking-tight flex items-center gap-2">
+            <span>{pageMeta.title}</span>
+            <span className="text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full font-normal border border-slate-700">
+              Session Live
+            </span>
+          </h1>
+          <p className="text-xs text-slate-400">{pageMeta.subtitle}</p>
+        </div>
 
-          {/* Center/Right Status & Multi-Account Switcher */}
-          <div className="flex items-center gap-3">
-            
-            {/* Multiple LinkedIn Account Switcher Dropdown */}
+        {/* Right Controls */}
+        <div className="flex items-center gap-3">
+          
+          {/* Active LinkedIn Account Dropdown Selector */}
+          {activeAccount && (
             <div className="relative">
               <button
+                type="button"
                 onClick={() => setShowAccountDropdown(!showAccountDropdown)}
-                className="flex items-center gap-2 bg-slate-800/90 border border-slate-700 hover:border-slate-600 px-3 py-1.5 rounded-lg text-xs transition"
+                className="bg-slate-900 hover:bg-slate-800/80 border border-slate-800 text-xs px-3 py-1.5 rounded-xl flex items-center gap-2.5 transition text-left shadow-sm"
               >
-                <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                <div className="text-left">
-                  <div className="font-semibold text-white max-w-[140px] truncate">
-                    {activeAccount ? activeAccount.name : 'Select Account'}
+                <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+                <div className="text-left hidden sm:block">
+                  <div className="font-semibold text-white leading-tight truncate max-w-[150px]">
+                    {activeAccount.name}
                   </div>
-                  <div className="text-[10px] text-slate-400 flex items-center gap-1">
-                    <span className="text-emerald-400 font-bold">{activeAccount?.health_score || 94}/100</span>
-                    <span>·</span>
-                    <span>{activeAccount?.invites_today || 0}/{activeAccount?.daily_cap || 20}</span>
+                  <div className="text-[10px] text-slate-400">
+                    {activeAccount.invites_today}/{activeAccount.daily_cap} invites today
                   </div>
                 </div>
-                <ChevronDown className="w-3.5 h-3.5 text-slate-400 ml-1" />
+                <div className="w-6 h-6 rounded-full bg-blue-600/10 border border-blue-500/20 text-blue-400 text-[10px] font-bold flex items-center justify-center shrink-0">
+                  {quotaPercent}%
+                </div>
+                <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
               </button>
 
               {showAccountDropdown && (
-                <div className="absolute right-0 mt-2 w-64 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl p-2 z-50 text-xs space-y-1 animate-fadeIn">
-                  <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-2 py-1">
-                    Connected LinkedIn Accounts ({accounts.length})
+                <div className="absolute right-0 mt-2 w-72 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-2 z-50 space-y-1 animate-fadeIn">
+                  <div className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center justify-between border-b border-slate-800">
+                    <span>Select LinkedIn Sending Account</span>
+                    <span>{accounts.length} Total</span>
                   </div>
-                  {accounts.map(acct => (
-                    <button
-                      key={acct.id}
-                      onClick={() => {
-                        onSelectActiveAccount(acct.id);
-                        setShowAccountDropdown(false);
-                      }}
-                      className={`w-full text-left p-2 rounded-lg transition flex items-center justify-between ${
-                        acct.id === activeAccount?.id 
-                          ? 'bg-blue-600/20 border border-blue-500/30 text-white' 
-                          : 'hover:bg-slate-800 text-slate-300'
-                      }`}
-                    >
-                      <div>
-                        <div className="font-semibold truncate max-w-[150px]">{acct.name}</div>
-                        <div className="text-[10px] text-slate-400">Health: {acct.health_score}/100</div>
-                      </div>
-                      <span className="text-[11px] font-mono text-blue-400">{acct.invites_today}/{acct.daily_cap}</span>
-                    </button>
-                  ))}
-                  <div className="pt-1 border-t border-slate-800">
-                    <button
-                      onClick={() => {
-                        setCurrentTab('accounts');
-                        setShowAccountDropdown(false);
-                      }}
-                      className="w-full text-center py-1.5 text-blue-400 hover:text-blue-300 font-bold text-[11px] block"
-                    >
-                      + Connect / Manage Accounts
-                    </button>
+
+                  <div className="space-y-1 max-h-56 overflow-y-auto">
+                    {accounts.map(acc => {
+                      const isSelected = acc.id === activeAccount.id;
+                      return (
+                        <div
+                          key={acc.id}
+                          onClick={() => {
+                            onSelectActiveAccount(acc.id);
+                            setShowAccountDropdown(false);
+                          }}
+                          className={`p-2.5 rounded-lg text-xs cursor-pointer transition flex items-center justify-between ${
+                            isSelected ? 'bg-blue-600/15 border border-blue-500/30' : 'hover:bg-slate-800'
+                          }`}
+                        >
+                          <div>
+                            <div className="font-semibold text-white flex items-center gap-1.5">
+                              <span>{acc.name}</span>
+                              {isSelected && <Check className="w-3 h-3 text-blue-400" />}
+                            </div>
+                            <div className="text-[11px] text-slate-400 truncate max-w-[180px]">
+                              {acc.headline || 'LinkedIn Account'}
+                            </div>
+                            <div className="text-[10px] text-slate-400 mt-1">
+                              Cap: {acc.invites_today}/{acc.daily_cap} today · Health: {acc.health_score}%
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowAccountDropdown(false);
+                      setCurrentTab('accounts');
+                    }}
+                    className="w-full text-center text-xs text-blue-400 hover:text-blue-300 py-1.5 font-medium border-t border-slate-800 block"
+                  >
+                    Manage All Connected Accounts →
+                  </button>
                 </div>
               )}
             </div>
+          )}
 
-            {/* Daily Quota Gauge */}
-            {activeAccount && (
-              <div className="hidden lg:flex items-center gap-2 bg-slate-800/80 border border-slate-700/70 px-3 py-1.5 rounded-lg text-xs">
-                <div className="text-slate-400">
-                  Today: <span className="font-semibold text-slate-200">{activeAccount.invites_today}/{activeAccount.daily_cap}</span>
-                </div>
-                <div className="w-16 h-1.5 bg-slate-700 rounded-full overflow-hidden">
-                  <div 
-                    className={`h-full rounded-full transition-all duration-500 ${
-                      quotaPercentage > 85 ? 'bg-amber-400' : 'bg-blue-500'
-                    }`}
-                    style={{ width: `${Math.min(quotaPercentage, 100)}%` }}
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* Emergency Kill Switch Button */}
+          {/* Pending Drafts Review Queue Pill */}
+          {pendingApprovalsCount > 0 && (
             <button
-              onClick={onToggleEmergencyPause}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition shadow-sm ${
-                emergencyPaused 
-                  ? 'bg-emerald-600 hover:bg-emerald-500 text-white' 
-                  : 'bg-red-500/15 hover:bg-red-500/25 text-red-300 border border-red-500/30'
-              }`}
-              title="Pause all sequences immediately"
+              onClick={() => setCurrentTab('message-studio')}
+              className="bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 px-3 py-1.5 rounded-xl text-xs font-medium flex items-center gap-1.5 transition shrink-0"
+              title="Review pending AI drafts"
             >
-              {emergencyPaused ? (
-                <>
-                  <PlayCircle className="w-4 h-4 text-emerald-300" />
-                  <span>Resume All</span>
-                </>
-              ) : (
-                <>
-                  <PauseCircle className="w-4 h-4 text-red-400" />
-                  <span>Pause All</span>
-                </>
-              )}
+              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+              <span>{pendingApprovalsCount} to review</span>
             </button>
+          )}
 
-            {/* User Profile & Sign Out */}
-            <div className="flex items-center gap-2 pl-2 border-l border-slate-800">
-              <div className="hidden xl:block text-right">
-                <div className="text-xs font-bold text-white">{currentUser.name}</div>
-                <div className="text-[10px] text-blue-400">{currentUser.plan} Plan</div>
-              </div>
-              <button
-                onClick={onLogout}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-slate-800 transition"
-                title="Sign out"
-              >
-                <LogOut className="w-4 h-4" />
-              </button>
-            </div>
+          {/* Emergency Kill Switch Button */}
+          <button
+            onClick={onToggleEmergencyPause}
+            className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition border shrink-0 ${
+              emergencyPaused
+                ? 'bg-red-600 text-white border-red-500 shadow-lg shadow-red-500/20'
+                : 'bg-slate-900 hover:bg-red-500/10 text-slate-300 hover:text-red-400 border-slate-800 hover:border-red-500/30'
+            }`}
+            title="Emergency kill switch"
+          >
+            {emergencyPaused ? (
+              <>
+                <PlayCircle className="w-3.5 h-3.5 text-white" />
+                <span>Resume</span>
+              </>
+            ) : (
+              <>
+                <PauseCircle className="w-3.5 h-3.5 text-red-400" />
+                <span>Kill Switch</span>
+              </>
+            )}
+          </button>
 
-          </div>
+          {/* Switch Role (Customer -> Admin) */}
+          <button
+            onClick={() => onSwitchRole('admin')}
+            className="hidden md:flex items-center gap-1 bg-purple-600/10 hover:bg-purple-600/20 text-purple-300 border border-purple-500/30 px-2.5 py-1.5 rounded-xl text-xs font-semibold transition"
+            title="Open Admin Portal"
+          >
+            <ShieldAlert className="w-3.5 h-3.5 text-purple-400" />
+            <span>Admin</span>
+          </button>
+
         </div>
 
-        {/* Navigation Tabs */}
-        <nav className="flex space-x-1 overflow-x-auto pb-2 scrollbar-none text-xs font-medium">
-          {navItems.map((item) => {
-            const isActive = currentTab === item.id;
-            return (
-              <button
-                key={item.id}
-                onClick={() => setCurrentTab(item.id)}
-                className={`flex items-center gap-2 px-3 py-2 rounded-lg whitespace-nowrap transition-colors ${
-                  isActive
-                    ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30 font-semibold'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
-                }`}
-              >
-                {item.icon}
-                <span>{item.label}</span>
-                {item.badge !== undefined && item.badge > 0 && (
-                  <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
-                    item.id === 'message-studio' 
-                      ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' 
-                      : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
-                  }`}>
-                    {item.badge}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </nav>
       </div>
+
     </header>
   );
 };

@@ -20,7 +20,7 @@ export type AdminTab =
 
 export type LeadStatus = 'new' | 'invited' | 'connected' | 'replied' | 'meeting_booked' | 'blacklisted';
 
-export type LeadSource = 'manual' | 'sales_navigator' | 'csv_upload';
+export type LeadSource = 'manual' | 'sales_navigator' | 'csv_upload' | 'basic_search';
 
 export interface Lead {
   id: string;

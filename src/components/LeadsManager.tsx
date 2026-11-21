@@ -108,6 +108,12 @@ export const LeadsManager: React.FC<LeadsManagerProps> = ({
       icon: <FileSpreadsheet className="w-3 h-3" />,
       bg: 'bg-emerald-500/10 border-emerald-500/20',
       text: 'text-emerald-400'
+    },
+    basic_search: {
+      label: 'Database Search',
+      icon: <Search className="w-3 h-3" />,
+      bg: 'bg-purple-500/10 border-purple-500/20',
+      text: 'text-purple-400'
     }
   };
 

@@ -21,10 +21,12 @@ import {
   removeStoredToken
 } from './services/api';
 import { Header } from './components/Header';
+import { Sidebar } from './components/Sidebar';
 import { Dashboard } from './components/Dashboard';
 import { AccountsManager } from './components/AccountsManager';
 import { LeadsManager } from './components/LeadsManager';
 import { CampaignsView } from './components/CampaignsView';
+import { CampaignBuilderModal } from './components/CampaignBuilderModal';
 import { MessageStudio } from './components/MessageStudio';
 import { InboxView } from './components/InboxView';
 import { AnalyticsView } from './components/AnalyticsView';
@@ -40,6 +42,8 @@ export const App: React.FC = () => {
   const [emergencyPaused, setEmergencyPaused] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
+  const [showGlobalCampaignBuilder, setShowGlobalCampaignBuilder] = useState<boolean>(false);
 
   // Dynamic Data State
   const [accounts, setAccounts] = useState<LinkedInAccount[]>([]);
@@ -126,6 +130,20 @@ export const App: React.FC = () => {
     setPendingActions([]);
     setInboxThreads([]);
     showToast('Signed out of platform session.');
+  };
+
+  const handleSwitchRole = (newRole: UserRole) => {
+    if (currentUser) {
+      const updated = { ...currentUser, role: newRole };
+      setCurrentUser(updated);
+      localStorage.setItem('outreach_user', JSON.stringify(updated));
+      if (newRole === 'admin') {
+        setCurrentTab('admin-portal');
+      } else {
+        setCurrentTab('dashboard');
+      }
+      showToast(`Switched workspace view to ${newRole.toUpperCase()} Portal`);
+    }
   };
 
   // Active LinkedIn Account Management
@@ -526,33 +544,67 @@ export const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex font-sans overflow-x-hidden">
       
-      {/* Customer Header with Multiple Account Switcher */}
-      <Header
+      {/* Enterprise Collapsible Sidebar */}
+      <Sidebar
         currentTab={currentTab}
         setCurrentTab={setCurrentTab}
         accounts={accounts}
         activeAccount={activeAccount}
         onSelectActiveAccount={handleSelectActiveAccount}
-        emergencyPaused={emergencyPaused}
-        onToggleEmergencyPause={handleToggleEmergencyPause}
         pendingApprovalsCount={pendingApprovalsCount}
         unreadInboxCount={unreadInboxCount}
+        leadsCount={leads.length}
+        campaignsCount={campaigns.length}
         currentUser={currentUser}
         onLogout={handleLogout}
+        onSwitchRole={handleSwitchRole}
+        onOpenNewCampaign={() => setShowGlobalCampaignBuilder(true)}
+        isCollapsed={isSidebarCollapsed}
+        setIsCollapsed={setIsSidebarCollapsed}
       />
 
-      {/* Toast Notification */}
-      {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 bg-slate-900 border border-slate-700 text-white px-4 py-2.5 rounded-xl shadow-2xl flex items-center gap-2 text-xs font-medium animate-fadeIn">
-          <span className="w-2 h-2 rounded-full bg-blue-400 animate-ping" />
-          <span>{toastMessage}</span>
-        </div>
-      )}
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-y-auto">
+        {/* Sticky Modern Top Header */}
+        <Header
+          currentTab={currentTab}
+          setCurrentTab={setCurrentTab}
+          accounts={accounts}
+          activeAccount={activeAccount}
+          onSelectActiveAccount={handleSelectActiveAccount}
+          emergencyPaused={emergencyPaused}
+          onToggleEmergencyPause={handleToggleEmergencyPause}
+          pendingApprovalsCount={pendingApprovalsCount}
+          unreadInboxCount={unreadInboxCount}
+          currentUser={currentUser}
+          onLogout={handleLogout}
+          onSwitchRole={handleSwitchRole}
+        />
 
-      {/* Main Customer Views */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {/* Global Campaign Builder Modal */}
+        {showGlobalCampaignBuilder && (
+          <CampaignBuilderModal
+            accounts={accounts}
+            onSave={(data) => {
+              handleSaveCampaign(data);
+              setShowGlobalCampaignBuilder(false);
+            }}
+            onClose={() => setShowGlobalCampaignBuilder(false)}
+          />
+        )}
+
+        {/* Toast Notification */}
+        {toastMessage && (
+          <div className="fixed bottom-6 right-6 z-50 bg-slate-900 border border-slate-700 text-white px-4 py-2.5 rounded-xl shadow-2xl flex items-center gap-2 text-xs font-medium animate-fadeIn">
+            <span className="w-2 h-2 rounded-full bg-blue-400 animate-ping" />
+            <span>{toastMessage}</span>
+          </div>
+        )}
+
+        {/* Main Customer Views */}
+        <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {currentTab === 'dashboard' && (
           <Dashboard
             account={legacySafetyConfig}
@@ -655,6 +707,7 @@ export const App: React.FC = () => {
       <footer className="border-t border-slate-900 bg-slate-950 py-4 text-center text-xs text-slate-500">
         <p>OutreachFlow · Production Safe LinkedIn Automation Platform · Dynamic Backend & Multi-Account Engine</p>
       </footer>
+      </div>
     </div>
   );
 };
