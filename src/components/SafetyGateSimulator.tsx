@@ -1,17 +1,22 @@
 import React, { useState } from 'react';
 import { 
   ShieldCheck, 
-  Cpu, 
-  Play, 
+  ShieldAlert, 
+  AlertTriangle, 
   CheckCircle2, 
   XCircle, 
   Clock, 
-  AlertTriangle, 
-  Ban, 
   RotateCcw,
   Sparkles,
-  Terminal,
-  Zap
+  Zap,
+  Activity,
+  Sliders,
+  Check,
+  UserCheck,
+  Lock,
+  Calendar,
+  Layers,
+  ArrowRight
 } from 'lucide-react';
 import { AccountSafetyConfig, Lead } from '../types';
 
@@ -20,438 +25,472 @@ interface SafetyGateSimulatorProps {
   leads: Lead[];
 }
 
+type TestScenario = 'safe_pass' | 'quota_cap' | 'outside_hours' | 'dnc_match' | 'pending_approval' | 'tripwire';
+
 export const SafetyGateSimulator: React.FC<SafetyGateSimulatorProps> = ({
   account,
   leads
 }) => {
-  // Simulator test inputs
-  const [simAccountStatus, setSimAccountStatus] = useState<'active' | 'warning' | 'paused'>('active');
-  const [simHealthScore, setSimHealthScore] = useState<number>(account.healthScore);
-  const [simDailySent, setSimDailySent] = useState<number>(account.invitesSentToday);
-  const [simDailyCap, setSimDailyCap] = useState<number>(account.dailyInviteCap);
-  const [simWeeklySent, setSimWeeklySent] = useState<number>(account.invitesSentThisWeek);
-  const [simWeeklyCap, setSimWeeklyCap] = useState<number>(account.weeklyInviteCap);
-  const [simInLeadTimezoneWindow, setSimInLeadTimezoneWindow] = useState<boolean>(true);
-  const [simIsDNC, setSimIsDNC] = useState<boolean>(false);
-  const [simAlreadyContacted, setSimAlreadyContacted] = useState<boolean>(false);
-  const [simNeedsApproval, setSimNeedsApproval] = useState<boolean>(true);
-  const [simIsApproved, setSimIsApproved] = useState<boolean>(true);
-  const [simCaptchaTripwire, setSimCaptchaTripwire] = useState<boolean>(false);
-  const [simAcceptanceRate, setSimAcceptanceRate] = useState<number>(38);
+  // Configurable diagnostic test state
+  const [isHealthy, setIsHealthy] = useState<boolean>(account.healthScore >= 60);
+  const [isWithinQuota, setIsWithinQuota] = useState<boolean>(account.invitesSentToday < account.dailyInviteCap);
+  const [isInsideHours, setIsInsideHours] = useState<boolean>(true);
+  const [isDncMatch, setIsDncMatch] = useState<boolean>(false);
+  const [isApproved, setIsApproved] = useState<boolean>(true);
+  const [isTripwireTriggered, setIsTripwireTriggered] = useState<boolean>(false);
+  const [activeScenario, setActiveScenario] = useState<TestScenario>('safe_pass');
+  const [jitterSeconds, setJitterSeconds] = useState<number>(84);
 
-  const [activePreset, setActivePreset] = useState<string>('normal_safe');
+  // Apply predefined scenarios for rapid testing
+  const selectScenario = (scenario: TestScenario) => {
+    setActiveScenario(scenario);
+    switch (scenario) {
+      case 'safe_pass':
+        setIsHealthy(true);
+        setIsWithinQuota(true);
+        setIsInsideHours(true);
+        setIsDncMatch(false);
+        setIsApproved(true);
+        setIsTripwireTriggered(false);
+        setJitterSeconds(Math.floor(Math.random() * (160 - 50 + 1)) + 50);
+        break;
+      case 'quota_cap':
+        setIsHealthy(true);
+        setIsWithinQuota(false);
+        setIsInsideHours(true);
+        setIsDncMatch(false);
+        setIsApproved(true);
+        setIsTripwireTriggered(false);
+        break;
+      case 'outside_hours':
+        setIsHealthy(true);
+        setIsWithinQuota(true);
+        setIsInsideHours(false);
+        setIsDncMatch(false);
+        setIsApproved(true);
+        setIsTripwireTriggered(false);
+        break;
+      case 'dnc_match':
+        setIsHealthy(true);
+        setIsWithinQuota(true);
+        setIsInsideHours(true);
+        setIsDncMatch(true);
+        setIsApproved(true);
+        setIsTripwireTriggered(false);
+        break;
+      case 'pending_approval':
+        setIsHealthy(true);
+        setIsWithinQuota(true);
+        setIsInsideHours(true);
+        setIsDncMatch(false);
+        setIsApproved(false);
+        setIsTripwireTriggered(false);
+        break;
+      case 'tripwire':
+        setIsHealthy(true);
+        setIsWithinQuota(true);
+        setIsInsideHours(true);
+        setIsDncMatch(false);
+        setIsApproved(true);
+        setIsTripwireTriggered(true);
+        break;
+    }
+  };
 
-  // Calculate Section 7 Python Logic Decision
-  const evaluateGate = () => {
-    const checks: { id: string; name: string; status: 'pass' | 'fail' | 'warn'; detail: string }[] = [];
+  // Evaluate the 6 core safety pillars
+  const runDiagnostics = () => {
+    const checks = [
+      {
+        id: 'account_integrity',
+        title: 'Account Health & Integrity',
+        description: isHealthy ? 'Account active with healthy safety score (>= 60%)' : 'Health score below 60% or account flagged',
+        passed: isHealthy,
+        critical: true
+      },
+      {
+        id: 'safety_tripwire',
+        title: 'Anti-Bot & Tripwire Monitor',
+        description: !isTripwireTriggered ? 'No unusual challenges or security checkpoints detected' : 'Security challenge detected; protective pause triggered',
+        passed: !isTripwireTriggered,
+        critical: true
+      },
+      {
+        id: 'velocity_pacing',
+        title: 'Daily & Weekly Velocity Pacing',
+        description: isWithinQuota ? `Within safety threshold (${account.invitesSentToday}/${account.dailyInviteCap} used)` : `Daily limit of ${account.dailyInviteCap} reached; queue postponed`,
+        passed: isWithinQuota,
+        critical: false
+      },
+      {
+        id: 'timezone_window',
+        title: 'Prospect Business Hours',
+        description: isInsideHours ? 'Recipient is currently inside local 9:00 AM – 6:00 PM window' : 'Outside prospect working hours; holding until next morning',
+        passed: isInsideHours,
+        critical: false
+      },
+      {
+        id: 'dnc_dedup',
+        title: 'DNC & Deduplication Check',
+        description: !isDncMatch ? 'Lead cleared: Not in Do-Not-Contact registry and not contacted in 90 days' : 'Matched company DNC blacklist or previously contacted',
+        passed: !isDncMatch,
+        critical: true
+      },
+      {
+        id: 'human_review',
+        title: 'Message Studio Sign-Off',
+        description: isApproved ? 'Outreach approved for dispatch' : 'Awaiting manual confirmation in Review Queue',
+        passed: isApproved,
+        critical: false
+      }
+    ];
 
-    // Check 1: Account status and health score
-    if (simAccountStatus !== 'active' || simHealthScore < 60) {
-      checks.push({
-        id: 'c1',
-        name: 'Account Health & Status',
-        status: 'fail',
-        detail: `Status=${simAccountStatus}, Health=${simHealthScore}/100 (<60 blocks)`
-      });
+    // Determine aggregate verdict
+    if (!isHealthy) {
       return {
-        decision: 'BLOCK',
-        actionOutcome: 'block("account")',
-        statusColor: 'text-red-400 bg-red-500/10 border-red-500/30',
-        reason: 'Account is paused or health score is below safe threshold (60).',
+        verdict: 'BLOCKED',
+        color: 'text-red-400 bg-red-500/10 border-red-500/20',
+        badge: 'bg-red-500/20 text-red-300 border border-red-500/30',
+        summary: 'Account health score is degraded. All automated dispatches are blocked to protect account longevity.',
+        action: 'Halt all outreach and review account standing.',
         checks
       };
     }
-    checks.push({
-      id: 'c1',
-      name: 'Account Health & Status',
-      status: 'pass',
-      detail: `Health is ${simHealthScore}/100 (Safe >= 60) and status is Active.`
-    });
 
-    // Check 2: Trip wires (CAPTCHA or low acceptance rate)
-    if (simCaptchaTripwire || simAcceptanceRate < 15) {
-      checks.push({
-        id: 'c2',
-        name: 'Trip Wire / Anti-Bot Guard',
-        status: 'fail',
-        detail: simCaptchaTripwire ? 'CAPTCHA challenge detected.' : `Acceptance rate (${simAcceptanceRate}%) is under 15% threshold.`
-      });
+    if (isTripwireTriggered) {
       return {
-        decision: 'AUTO-PAUSE 72H',
-        actionOutcome: 'auto_pause("tripwire")',
-        statusColor: 'text-red-400 bg-red-500/10 border-red-500/30',
-        reason: 'Trip wire triggered! Auto-pausing account for 72h to protect account health.',
+        verdict: 'SAFETY PAUSE',
+        color: 'text-rose-400 bg-rose-500/10 border-rose-500/20',
+        badge: 'bg-rose-500/20 text-rose-300 border border-rose-500/30',
+        summary: 'Anti-bot tripwire triggered. Protective cooldown applied to prevent LinkedIn account restrictions.',
+        action: 'System enters 72-hour protective cooling mode.',
         checks
       };
     }
-    checks.push({
-      id: 'c2',
-      name: 'Trip Wire / Anti-Bot Guard',
-      status: 'pass',
-      detail: `No challenge detected, acceptance rate is healthy (${simAcceptanceRate}%).`
-    });
 
-    // Check 3: Daily & Weekly Quotas
-    if (simWeeklySent >= simWeeklyCap || simDailySent >= simDailyCap) {
-      checks.push({
-        id: 'c3',
-        name: 'Quota Pacing Check',
-        status: 'fail',
-        detail: `Daily (${simDailySent}/${simDailyCap}) or Weekly (${simWeeklySent}/${simWeeklyCap}) cap reached.`
-      });
+    if (!isWithinQuota) {
       return {
-        decision: 'RESCHEDULE',
-        actionOutcome: 'reschedule(next_window(acct))',
-        statusColor: 'text-amber-400 bg-amber-500/10 border-amber-500/30',
-        reason: 'Safety cap reached for today or rolling 7-day period. Postponing until window resets.',
+        verdict: 'RESCHEDULED',
+        color: 'text-amber-400 bg-amber-500/10 border-amber-500/20',
+        badge: 'bg-amber-500/20 text-amber-300 border border-amber-500/30',
+        summary: 'Daily rate threshold reached. Outgoing action queued for the next available sending slot tomorrow.',
+        action: 'Queued for automatic dispatch at next active window (09:00 AM).',
         checks
       };
     }
-    checks.push({
-      id: 'c3',
-      name: 'Quota Pacing Check',
-      status: 'pass',
-      detail: `Daily: ${simDailySent}/${simDailyCap} | Weekly: ${simWeeklySent}/${simWeeklyCap}`
-    });
 
-    // Check 4: Lead working hours in lead timezone
-    if (!simInLeadTimezoneWindow) {
-      checks.push({
-        id: 'c4',
-        name: 'Timezone & Working Hours',
-        status: 'fail',
-        detail: 'Current local time in prospect timezone is outside active campaign hours (9 AM - 6 PM).'
-      });
+    if (!isInsideHours) {
       return {
-        decision: 'RESCHEDULE',
-        actionOutcome: 'reschedule(next_open_slot(action))',
-        statusColor: 'text-blue-400 bg-blue-500/10 border-blue-500/30',
-        reason: 'Lead is outside local business hours. Rescheduling for their next 9:00 AM window.',
+        verdict: 'OUTSIDE HOURS',
+        color: 'text-sky-400 bg-sky-500/10 border-sky-500/20',
+        badge: 'bg-sky-500/20 text-sky-300 border border-sky-500/30',
+        summary: 'Recipient timezone is currently in off-hours. Outreach is held to ensure delivery during work hours.',
+        action: 'Action rescheduled for recipient\'s local 9:00 AM window.',
         checks
       };
     }
-    checks.push({
-      id: 'c4',
-      name: 'Timezone & Working Hours',
-      status: 'pass',
-      detail: 'Lead local time is inside campaign sending window (Mon-Fri 9am-6pm).'
-    });
 
-    // Check 5: DNC and Dedup
-    if (simIsDNC || simAlreadyContacted) {
-      checks.push({
-        id: 'c5',
-        name: 'DNC Blacklist & Deduplication',
-        status: 'fail',
-        detail: simIsDNC ? 'Prospect matches Do-Not-Contact blacklist.' : 'Prospect was already contacted within last 90 days.'
-      });
+    if (isDncMatch) {
       return {
-        decision: 'SKIP',
-        actionOutcome: 'skip()',
-        statusColor: 'text-slate-400 bg-slate-800 border-slate-700',
-        reason: 'Lead skipped without sending. No quota or action consumed.',
+        verdict: 'SKIPPED',
+        color: 'text-slate-400 bg-slate-800/60 border-slate-700',
+        badge: 'bg-slate-700 text-slate-300 border border-slate-600',
+        summary: 'Prospect or domain is registered on your Do-Not-Contact blacklist. Skipped without consuming quota.',
+        action: 'Skipped permanently. Lead marked as DNC in directory.',
         checks
       };
     }
-    checks.push({
-      id: 'c5',
-      name: 'DNC Blacklist & Deduplication',
-      status: 'pass',
-      detail: 'Lead URL and domain cleared: Not on DNC list, zero duplicate contacts.'
-    });
 
-    // Check 6: Human Approval Gate
-    if (simNeedsApproval && !simIsApproved) {
-      checks.push({
-        id: 'c6',
-        name: 'Human Approval Gate',
-        status: 'warn',
-        detail: 'Draft awaiting human sign-off in Message Studio Review Queue.'
-      });
+    if (!isApproved) {
       return {
-        decision: 'HOLD',
-        actionOutcome: 'hold()',
-        statusColor: 'text-amber-400 bg-amber-500/10 border-amber-500/30',
-        reason: 'Action held in pending state until user clicks Approve in review studio.',
+        verdict: 'AWAITING APPROVAL',
+        color: 'text-purple-400 bg-purple-500/10 border-purple-500/20',
+        badge: 'bg-purple-500/20 text-purple-300 border border-purple-500/30',
+        summary: 'Action is waiting for human operator sign-off in the Message Studio review queue.',
+        action: 'Visit Message Studio to approve or edit draft.',
         checks
       };
     }
-    checks.push({
-      id: 'c6',
-      name: 'Human Approval Gate',
-      status: 'pass',
-      detail: 'Draft approved by human operator.'
-    });
-
-    // Check 7: Randomized Spacing (Success Outcome)
-    const randomDelay = Math.floor(Math.random() * (180 - 45 + 1)) + 45;
-    checks.push({
-      id: 'c7',
-      name: 'Anti-Detection Random Jitter',
-      status: 'pass',
-      detail: `Calculated random spacing delay: ${randomDelay} seconds.`
-    });
 
     return {
-      decision: 'SEND_AFTER_DELAY',
-      actionOutcome: `send_after(${randomDelay}s)`,
-      statusColor: 'text-emerald-400 bg-emerald-500/15 border-emerald-500/30',
-      reason: `All 8 safety checks cleared! Action will be dispatched via extension in ${randomDelay} seconds.`,
-      checks,
-      delay: randomDelay
+      verdict: 'PASSED · SAFE TO SEND',
+      color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
+      badge: 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30',
+      summary: `All 6 safety gates verified! Outgoing action cleared with human-like randomized spacing (${jitterSeconds}s delay).`,
+      action: `Dispatched automatically via authenticated session in ${jitterSeconds}s.`,
+      checks
     };
   };
 
-  const currentResult = evaluateGate();
-
-  const applyPreset = (preset: string) => {
-    setActivePreset(preset);
-    if (preset === 'normal_safe') {
-      setSimAccountStatus('active');
-      setSimHealthScore(94);
-      setSimDailySent(14);
-      setSimDailyCap(20);
-      setSimWeeklySent(72);
-      setSimWeeklyCap(100);
-      setSimInLeadTimezoneWindow(true);
-      setSimIsDNC(false);
-      setSimAlreadyContacted(false);
-      setSimNeedsApproval(true);
-      setSimIsApproved(true);
-      setSimCaptchaTripwire(false);
-      setSimAcceptanceRate(38);
-    } else if (preset === 'over_quota') {
-      setSimDailySent(20);
-      setSimDailyCap(20);
-      setSimWeeklySent(100);
-      setSimWeeklyCap(100);
-      setSimInLeadTimezoneWindow(true);
-      setSimIsDNC(false);
-    } else if (preset === 'outside_timezone') {
-      setSimDailySent(10);
-      setSimInLeadTimezoneWindow(false);
-    } else if (preset === 'dnc_hit') {
-      setSimIsDNC(true);
-    } else if (preset === 'unapproved') {
-      setSimNeedsApproval(true);
-      setSimIsApproved(false);
-    } else if (preset === 'captcha_tripwire') {
-      setSimCaptchaTripwire(true);
-    }
-  };
+  const result = runDiagnostics();
+  const passedCount = result.checks.filter(c => c.passed).length;
 
   return (
     <div className="space-y-6">
       
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
-            <Cpu className="w-5 h-5 text-emerald-400" />
-            <span>Interactive Safety Gate Simulator</span>
-          </h1>
-          <p className="text-xs text-slate-400">
-            Live execution tester for the 8-stage gate logic specified in Section 7 of the Technical Architecture.
-          </p>
+      {/* Top Header & Live Health Overview */}
+      <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+                <ShieldCheck className="w-5 h-5" />
+              </div>
+              <div>
+                <h1 className="text-xl font-bold text-white tracking-tight">Safety Gate Diagnostics</h1>
+                <p className="text-xs text-slate-400">
+                  Pre-flight verification engine enforcing anti-ban pacing, DNC protection, and organic jitter.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Quick Status Pill Badges */}
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <div className="bg-slate-800/80 border border-slate-700/80 rounded-xl px-3 py-1.5 flex items-center gap-2">
+              <Activity className="w-3.5 h-3.5 text-emerald-400" />
+              <span className="text-slate-400">Health:</span>
+              <span className="font-bold text-white">{account.healthScore}/100</span>
+            </div>
+
+            <div className="bg-slate-800/80 border border-slate-700/80 rounded-xl px-3 py-1.5 flex items-center gap-2">
+              <Clock className="w-3.5 h-3.5 text-blue-400" />
+              <span className="text-slate-400">Today:</span>
+              <span className="font-bold text-white">{account.invitesSentToday}/{account.dailyInviteCap}</span>
+            </div>
+
+            <div className="bg-slate-800/80 border border-slate-700/80 rounded-xl px-3 py-1.5 flex items-center gap-2">
+              <Zap className="w-3.5 h-3.5 text-amber-400" />
+              <span className="text-slate-400">Random Delay:</span>
+              <span className="font-bold text-white">45–180s</span>
+            </div>
+          </div>
         </div>
 
-        {/* Preset Selector */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
-          <span className="text-slate-400 text-[11px] mr-1 hidden sm:inline">Presets:</span>
-          {[
-            { id: 'normal_safe', label: '✅ All Clear (Send)' },
-            { id: 'over_quota', label: '⚠️ Over Daily Cap' },
-            { id: 'outside_timezone', label: '🌙 Night Timezone' },
-            { id: 'dnc_hit', label: '🚫 DNC Competitor' },
-            { id: 'unapproved', label: '⏳ Needs Approval' },
-            { id: 'captcha_tripwire', label: '🚨 Captcha Tripwire' },
-          ].map(p => (
-            <button
-              key={p.id}
-              onClick={() => applyPreset(p.id)}
-              className={`px-2.5 py-1 rounded-lg font-medium whitespace-nowrap transition ${
-                activePreset === p.id 
-                  ? 'bg-blue-600 text-white shadow' 
-                  : 'bg-slate-800 text-slate-300 hover:text-white'
-              }`}
-            >
-              {p.label}
-            </button>
-          ))}
+        {/* Quick Scenario Buttons */}
+        <div className="pt-3 border-t border-slate-800/80">
+          <div className="text-[11px] font-semibold text-slate-400 mb-2 uppercase tracking-wider">
+            Quick Diagnostic Test Scenarios:
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 text-xs">
+            {[
+              { id: 'safe_pass' as TestScenario, label: 'Standard Clean', icon: CheckCircle2, activeBg: 'bg-emerald-600 text-white' },
+              { id: 'quota_cap' as TestScenario, label: 'Cap Reached', icon: Clock, activeBg: 'bg-amber-600 text-white' },
+              { id: 'outside_hours' as TestScenario, label: 'After Hours', icon: Calendar, activeBg: 'bg-sky-600 text-white' },
+              { id: 'dnc_match' as TestScenario, label: 'DNC Block', icon: Lock, activeBg: 'bg-slate-600 text-white' },
+              { id: 'pending_approval' as TestScenario, label: 'Awaiting Sign-off', icon: UserCheck, activeBg: 'bg-purple-600 text-white' },
+              { id: 'tripwire' as TestScenario, label: 'Tripwire Alert', icon: ShieldAlert, activeBg: 'bg-rose-600 text-white' },
+            ].map(sc => {
+              const Icon = sc.icon;
+              const isSelected = activeScenario === sc.id;
+              return (
+                <button
+                  key={sc.id}
+                  onClick={() => selectScenario(sc.id)}
+                  className={`py-2 px-3 rounded-xl border text-left flex items-center gap-2 transition ${
+                    isSelected
+                      ? `${sc.activeBg} border-transparent shadow-lg font-semibold`
+                      : 'bg-slate-800/60 border-slate-700/70 text-slate-300 hover:bg-slate-800 hover:text-white'
+                  }`}
+                >
+                  <Icon className="w-3.5 h-3.5 shrink-0" />
+                  <span className="truncate">{sc.label}</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
 
-      {/* Main Simulator Grid */}
+      {/* Main 2-Column Diagnostic Workbench */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         
-        {/* Left: Interactive Input Matrix (7 cols) */}
-        <div className="lg:col-span-7 space-y-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4 shadow-lg">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <Terminal className="w-4 h-4 text-blue-400" />
-                <span>Simulated Request Context</span>
-              </h3>
-              <span className="text-[11px] text-slate-400 font-mono">gate(action, acct)</span>
+        {/* Left Column: Test Condition Controls (5 cols) */}
+        <div className="lg:col-span-5 space-y-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4 shadow-lg">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-2">
+                <Sliders className="w-4 h-4 text-blue-400" />
+                <h3 className="text-sm font-bold text-white">Pre-Flight Test Parameters</h3>
+              </div>
+              <button
+                onClick={() => selectScenario('safe_pass')}
+                className="text-[11px] text-slate-400 hover:text-white flex items-center gap-1 transition"
+              >
+                <RotateCcw className="w-3 h-3" />
+                <span>Reset</span>
+              </button>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+            <div className="space-y-3 text-xs">
               
-              {/* Account Status */}
-              <div className="bg-slate-800/40 p-3 rounded-lg border border-slate-700/60 space-y-1.5">
-                <label className="text-slate-300 font-semibold block">Account Status & Health</label>
-                <div className="flex items-center gap-2">
-                  <select
-                    value={simAccountStatus}
-                    onChange={(e) => setSimAccountStatus(e.target.value as any)}
-                    className="bg-slate-800 border border-slate-700 text-slate-200 rounded px-2 py-1 text-xs"
-                  >
-                    <option value="active">Active</option>
-                    <option value="warning">Warning</option>
-                    <option value="paused">Paused</option>
-                  </select>
-                  <div className="flex-1">
-                    <span className="text-[10px] text-slate-400">Score: {simHealthScore}/100</span>
-                    <input 
-                      type="range"
-                      min={40}
-                      max={100}
-                      value={simHealthScore}
-                      onChange={(e) => setSimHealthScore(Number(e.target.value))}
-                      className="w-full accent-blue-500"
-                    />
-                  </div>
+              {/* Account Standing */}
+              <div className="flex items-center justify-between p-3 rounded-xl bg-slate-800/40 border border-slate-800">
+                <div>
+                  <div className="font-semibold text-white">Account Standing</div>
+                  <p className="text-[11px] text-slate-400">Health score and session token validity</p>
                 </div>
+                <button
+                  onClick={() => setIsHealthy(!isHealthy)}
+                  className={`px-3 py-1.5 rounded-lg font-semibold text-xs transition ${
+                    isHealthy 
+                      ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
+                      : 'bg-red-500/10 text-red-400 border border-red-500/20'
+                  }`}
+                >
+                  {isHealthy ? 'Healthy (94%)' : 'Degraded (<60%)'}
+                </button>
               </div>
 
-              {/* Today's Quota */}
-              <div className="bg-slate-800/40 p-3 rounded-lg border border-slate-700/60 space-y-1.5">
-                <div className="flex justify-between">
-                  <label className="text-slate-300 font-semibold">Today's Sent / Cap</label>
-                  <span className="font-mono text-blue-400">{simDailySent} / {simDailyCap}</span>
+              {/* Pacing / Velocity */}
+              <div className="flex items-center justify-between p-3 rounded-xl bg-slate-800/40 border border-slate-800">
+                <div>
+                  <div className="font-semibold text-white">Daily Velocity Limit</div>
+                  <p className="text-[11px] text-slate-400">Current volume vs. daily cap ({account.dailyInviteCap})</p>
                 </div>
-                <input 
-                  type="range"
-                  min={0}
-                  max={simDailyCap + 5}
-                  value={simDailySent}
-                  onChange={(e) => setSimDailySent(Number(e.target.value))}
-                  className="w-full accent-blue-500"
-                />
-                <span className="text-[10px] text-slate-400">Drag above {simDailyCap} to trigger cap reschedule.</span>
+                <button
+                  onClick={() => setIsWithinQuota(!isWithinQuota)}
+                  className={`px-3 py-1.5 rounded-lg font-semibold text-xs transition ${
+                    isWithinQuota 
+                      ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
+                      : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                  }`}
+                >
+                  {isWithinQuota ? 'Under Limit' : 'Cap Hit'}
+                </button>
               </div>
 
-              {/* Timezone Window */}
-              <div className="bg-slate-800/40 p-3 rounded-lg border border-slate-700/60 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-300 font-semibold">Lead Timezone Window</span>
-                  <button
-                    onClick={() => setSimInLeadTimezoneWindow(!simInLeadTimezoneWindow)}
-                    className={`px-2 py-0.5 rounded text-[11px] font-bold ${
-                      simInLeadTimezoneWindow 
-                        ? 'bg-emerald-500/20 text-emerald-400' 
-                        : 'bg-red-500/20 text-red-400'
-                    }`}
-                  >
-                    {simInLeadTimezoneWindow ? '9 AM - 6 PM (Open)' : 'Off-Hours (Night)'}
-                  </button>
+              {/* Prospect Local Hours */}
+              <div className="flex items-center justify-between p-3 rounded-xl bg-slate-800/40 border border-slate-800">
+                <div>
+                  <div className="font-semibold text-white">Prospect Business Hours</div>
+                  <p className="text-[11px] text-slate-400">Target local timezone (9:00 AM – 6:00 PM)</p>
                 </div>
-                <p className="text-[10px] text-slate-400">Controls in_window(action.lead_tz, schedule)</p>
+                <button
+                  onClick={() => setIsInsideHours(!isInsideHours)}
+                  className={`px-3 py-1.5 rounded-lg font-semibold text-xs transition ${
+                    isInsideHours 
+                      ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
+                      : 'bg-sky-500/10 text-sky-400 border border-sky-500/20'
+                  }`}
+                >
+                  {isInsideHours ? 'Business Hours' : 'Night Timezone'}
+                </button>
               </div>
 
-              {/* DNC Blacklist Match */}
-              <div className="bg-slate-800/40 p-3 rounded-lg border border-slate-700/60 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-300 font-semibold">DNC / Competitor Match</span>
-                  <button
-                    onClick={() => setSimIsDNC(!simIsDNC)}
-                    className={`px-2 py-0.5 rounded text-[11px] font-bold ${
-                      simIsDNC ? 'bg-red-500/20 text-red-400' : 'bg-slate-800 text-slate-400'
-                    }`}
-                  >
-                    {simIsDNC ? 'Match Found (DNC)' : 'Clean URL'}
-                  </button>
+              {/* DNC & Blacklist */}
+              <div className="flex items-center justify-between p-3 rounded-xl bg-slate-800/40 border border-slate-800">
+                <div>
+                  <div className="font-semibold text-white">Do-Not-Contact Registry</div>
+                  <p className="text-[11px] text-slate-400">Exclusions, competitors, & prior touches</p>
                 </div>
-                <p className="text-[10px] text-slate-400">Controls is_dnc(action.lead)</p>
+                <button
+                  onClick={() => setIsDncMatch(!isDncMatch)}
+                  className={`px-3 py-1.5 rounded-lg font-semibold text-xs transition ${
+                    !isDncMatch 
+                      ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
+                      : 'bg-slate-700 text-slate-300 border border-slate-600'
+                  }`}
+                >
+                  {!isDncMatch ? 'Clean Prospect' : 'Blacklisted'}
+                </button>
               </div>
 
-              {/* Human Approval Status */}
-              <div className="bg-slate-800/40 p-3 rounded-lg border border-slate-700/60 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-300 font-semibold">Human Approval Gate</span>
-                  <button
-                    onClick={() => setSimIsApproved(!simIsApproved)}
-                    className={`px-2 py-0.5 rounded text-[11px] font-bold ${
-                      simIsApproved ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-300'
-                    }`}
-                  >
-                    {simIsApproved ? 'Approved' : 'Pending Review'}
-                  </button>
+              {/* Operator Approval */}
+              <div className="flex items-center justify-between p-3 rounded-xl bg-slate-800/40 border border-slate-800">
+                <div>
+                  <div className="font-semibold text-white">Operator Sign-Off</div>
+                  <p className="text-[11px] text-slate-400">Human review in Message Studio</p>
                 </div>
-                <p className="text-[10px] text-slate-400">Controls action.status == "approved"</p>
+                <button
+                  onClick={() => setIsApproved(!isApproved)}
+                  className={`px-3 py-1.5 rounded-lg font-semibold text-xs transition ${
+                    isApproved 
+                      ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
+                      : 'bg-purple-500/10 text-purple-400 border border-purple-500/20'
+                  }`}
+                >
+                  {isApproved ? 'Approved' : 'Needs Review'}
+                </button>
               </div>
 
-              {/* Trip Wire Check */}
-              <div className="bg-slate-800/40 p-3 rounded-lg border border-slate-700/60 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-300 font-semibold">Anti-Bot Trip Wire</span>
-                  <button
-                    onClick={() => setSimCaptchaTripwire(!simCaptchaTripwire)}
-                    className={`px-2 py-0.5 rounded text-[11px] font-bold ${
-                      simCaptchaTripwire ? 'bg-red-500/20 text-red-400 animate-pulse' : 'bg-slate-800 text-slate-400'
-                    }`}
-                  >
-                    {simCaptchaTripwire ? 'Captcha Detected!' : 'Normal Traffic'}
-                  </button>
+              {/* Security Tripwire */}
+              <div className="flex items-center justify-between p-3 rounded-xl bg-slate-800/40 border border-slate-800">
+                <div>
+                  <div className="font-semibold text-white">Anti-Bot Tripwire Guard</div>
+                  <p className="text-[11px] text-slate-400">Unusual challenge detection flag</p>
                 </div>
-                <p className="text-[10px] text-slate-400">Simulates LinkedIn security checkpoint.</p>
+                <button
+                  onClick={() => setIsTripwireTriggered(!isTripwireTriggered)}
+                  className={`px-3 py-1.5 rounded-lg font-semibold text-xs transition ${
+                    !isTripwireTriggered 
+                      ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
+                      : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+                  }`}
+                >
+                  {!isTripwireTriggered ? 'Clear' : 'Challenge Flagged'}
+                </button>
               </div>
 
             </div>
           </div>
-
-
         </div>
 
-        {/* Right: Live Gate Evaluation & Step Breakdown (5 cols) */}
-        <div className="lg:col-span-5 space-y-4">
+        {/* Right Column: Live Safety Verdict & Checklist (7 cols) */}
+        <div className="lg:col-span-7 space-y-4">
           
-          {/* Decision Outcome Card */}
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4 shadow-xl">
+          {/* Verdict Card */}
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Gate Decision</span>
-              <span className="text-[11px] text-slate-500 font-mono">Real-time</span>
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Pre-Flight Audit Verdict</span>
+              <span className="text-xs text-slate-500 font-medium">{passedCount} of 6 Checks Passed</span>
             </div>
 
-            <div className={`p-4 rounded-xl border ${currentResult.statusColor} space-y-2 text-center`}>
-              <div className="text-xs font-mono uppercase tracking-widest font-bold">
-                Outcome: {currentResult.decision}
+            <div className={`p-5 rounded-xl border ${result.color} space-y-2`}>
+              <div className="flex items-center justify-between">
+                <span className={`text-xs font-bold px-2.5 py-1 rounded-lg ${result.badge}`}>
+                  {result.verdict}
+                </span>
+                <span className="text-[11px] font-mono opacity-75">Auto-Protected</span>
               </div>
-              <div className="text-lg font-bold tracking-tight">
-                {currentResult.actionOutcome}
-              </div>
-              <p className="text-xs opacity-90 leading-relaxed font-sans">
-                {currentResult.reason}
+              <p className="text-sm font-medium text-white pt-1">
+                {result.summary}
               </p>
+              <div className="text-xs text-slate-300 pt-1 flex items-center gap-1.5">
+                <ArrowRight className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                <span className="font-semibold text-slate-200">Next Action:</span>
+                <span>{result.action}</span>
+              </div>
             </div>
 
-            {/* Checklist of 8 Checks */}
-            <div className="space-y-2 pt-2 border-t border-slate-800">
-              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-2">
-                Evaluated Checks
+            {/* Comprehensive Safety Checks List */}
+            <div className="space-y-2 pt-2">
+              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
+                Verification Details:
               </span>
 
-              {currentResult.checks.map(chk => (
-                <div key={chk.id} className="flex items-start gap-2.5 text-xs p-2 rounded-lg bg-slate-800/40">
-                  {chk.status === 'pass' && <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />}
-                  {chk.status === 'fail' && <XCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />}
-                  {chk.status === 'warn' && <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />}
-                  <div>
-                    <div className="font-semibold text-white">{chk.name}</div>
-                    <div className="text-[11px] text-slate-400">{chk.detail}</div>
+              <div className="divide-y divide-slate-800/80 border border-slate-800/80 rounded-xl overflow-hidden bg-slate-950/40">
+                {result.checks.map(chk => (
+                  <div key={chk.id} className="p-3 flex items-center justify-between text-xs hover:bg-slate-800/20 transition">
+                    <div className="flex items-center gap-3">
+                      {chk.passed ? (
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                      ) : (
+                        <XCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                      )}
+                      <div>
+                        <div className="font-semibold text-white">{chk.title}</div>
+                        <div className="text-[11px] text-slate-400">{chk.description}</div>
+                      </div>
+                    </div>
+
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                      chk.passed ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'
+                    }`}>
+                      {chk.passed ? 'PASS' : 'HOLD'}
+                    </span>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
 
           </div>
