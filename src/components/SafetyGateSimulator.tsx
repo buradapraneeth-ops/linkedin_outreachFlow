@@ -410,27 +410,7 @@ export const SafetyGateSimulator: React.FC<SafetyGateSimulatorProps> = ({
             </div>
           </div>
 
-          {/* Reference Python Code Preview from Section 7 */}
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 font-mono text-[11px] space-y-2">
-            <div className="text-slate-400 font-semibold flex items-center justify-between">
-              <span>Section 7 Reference Implementation (Python)</span>
-              <span className="text-[10px] text-blue-400">Backend Safety Engine</span>
-            </div>
-            <pre className="text-slate-300 overflow-x-auto p-3 rounded-lg bg-slate-950/80 border border-slate-800 leading-relaxed">
-{`def gate(action, acct):
-    if acct.status != "active" or acct.health < 60:
-        return block("account")
-    if weekly_sent(acct) >= acct.weekly_cap or daily_sent(acct) >= acct.daily_cap:
-        return reschedule(next_window(acct))
-    if not in_window(action.lead_tz, action.campaign.schedule):
-        return reschedule(next_open_slot(action))
-    if is_dnc(action.lead) or already_contacted(action):
-        return skip()
-    if action.needs_approval and action.status != "approved":
-        return hold()
-    return send_after(random_delay(45, 180))`}
-            </pre>
-          </div>
+
         </div>
 
         {/* Right: Live Gate Evaluation & Step Breakdown (5 cols) */}
